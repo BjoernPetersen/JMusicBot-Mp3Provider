@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.github.bjoernpetersen</groupId>
   <artifactId>musicbot-mp3provider</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <url>https://github.com/BjoernPetersen/JMusicBot-Mp3Provider</url>
   <name>${project.groupId}:${project.artifactId}</name>
   <licenses>
@@ -33,7 +33,7 @@
     <java.version>1.8</java.version>
     <kotlin.version>1.1.51</kotlin.version>
     <junit.version>4.12</junit.version>
-    <musicbot.version>0.10.0</musicbot.version>
+    <musicbot.version>0.11.0</musicbot.version>
     <mp3playback.version>0.10.0</mp3playback.version>
     <id3tag.version>0.9.1</id3tag.version>
   </properties>
