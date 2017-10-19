@@ -179,10 +179,6 @@ class Mp3Suggester : Suggester {
     return nextSongs.pop()
   }
 
-  override fun notifyPlayed(song: Song) {
-    removeSuggestion(song)
-  }
-
   override fun removeSuggestion(song: Song) {
     nextSongs.remove(song)
   }
