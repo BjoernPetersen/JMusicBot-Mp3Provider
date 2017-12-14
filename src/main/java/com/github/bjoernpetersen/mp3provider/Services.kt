@@ -6,11 +6,11 @@ import com.github.bjoernpetersen.jmusicbot.config.ui.FileChooserButton
 import com.github.bjoernpetersen.jmusicbot.platform.Platform
 import com.github.bjoernpetersen.jmusicbot.platform.Support
 import com.github.bjoernpetersen.jmusicbot.playback.PlaybackFactory
+import com.github.bjoernpetersen.jmusicbot.playback.included.Mp3PlaybackFactory
 import com.github.bjoernpetersen.jmusicbot.provider.DependencyMap
 import com.github.bjoernpetersen.jmusicbot.provider.NoSuchSongException
 import com.github.bjoernpetersen.jmusicbot.provider.Provider
 import com.github.bjoernpetersen.jmusicbot.provider.Suggester
-import com.github.bjoernpetersen.mp3Playback.Mp3PlaybackFactory
 import com.github.zafarkhaja.semver.Version
 import com.mpatric.mp3agic.Mp3File
 import java.io.File
@@ -70,7 +70,7 @@ class Mp3Provider : Provider {
   override fun getPlaybackDependencies(): Set<Class<out PlaybackFactory>> =
       setOf(Mp3PlaybackFactory::class.java)
 
-  override fun getMinSupportedVersion(): Version = Version.forIntegers(0, 10, 0)
+  override fun getMinSupportedVersion(): Version = Version.forIntegers(0, 14, 0)
   override fun getMaxSupportedVersion(): Version = MusicBot.getVersion()
 
   override fun initialize(initWriter: InitStateWriter, manager: PlaybackFactoryManager) {
