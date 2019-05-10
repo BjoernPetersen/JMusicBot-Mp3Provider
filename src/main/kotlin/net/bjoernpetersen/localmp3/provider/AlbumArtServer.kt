@@ -52,7 +52,7 @@ internal class AlbumArtServer {
 
     private suspend fun PipelineContext<Unit, ApplicationCall>.serveImage() {
         val params = call.request.queryParameters
-        val path = params[PARAM_NAME] ?: throw BadRequestException()
+        val path = params[PARAM_NAME] ?: throw BadRequestException("Missing parameter: $PARAM_NAME")
         val mp3File = try {
             Mp3File(path)
         } catch (e: IOException) {
