@@ -62,23 +62,28 @@ dependencies {
     implementation(
         group = "io.github.microutils",
         name = "kotlin-logging",
-        version = Lib.KOTLIN_LOGGING)
+        version = Lib.KOTLIN_LOGGING
+    )
     compileOnly(
         group = "com.github.bjoernpetersen",
         name = "musicbot",
-        version = Lib.MUSICBOT)
+        version = Lib.MUSICBOT
+    )
 
     implementation(
         group = "com.mpatric",
         name = "mp3agic",
-        version = Lib.ID3_TAG)
+        version = Lib.ID3_TAG
+    )
 
     testImplementation(
         group = "org.junit.jupiter",
         name = "junit-jupiter-api",
-        version = Lib.JUNIT)
+        version = Lib.JUNIT
+    )
     testRuntime(
         group = "org.junit.jupiter",
         name = "junit-jupiter-engine",
-        version = Lib.JUNIT)
+        version = Lib.JUNIT
+    )
 }
