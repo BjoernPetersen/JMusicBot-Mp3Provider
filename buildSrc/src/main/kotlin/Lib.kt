@@ -5,5 +5,7 @@ object Lib {
     const val MUSICBOT = "0.21.0"
     const val ID3_TAG = "0.9.1"
 
+    const val KTOR = "1.1.4"
+
     const val JUNIT = "5.4.2"
 }
