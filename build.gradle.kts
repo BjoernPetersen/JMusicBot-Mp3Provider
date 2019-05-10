@@ -5,8 +5,6 @@ plugins {
     kotlin("jvm") version Plugin.KOTLIN
     idea
 
-    id("com.github.spotbugs") version Plugin.SPOTBUGS_PLUGIN
-
     id("com.github.johnrengelman.shadow") version Plugin.SHADOW_JAR
 }
 
@@ -26,11 +24,6 @@ idea {
     module {
         isDownloadJavadoc = true
     }
-}
-
-spotbugs {
-    isIgnoreFailures = true
-    toolVersion = Plugin.SPOTBUGS_TOOL
 }
 
 java {

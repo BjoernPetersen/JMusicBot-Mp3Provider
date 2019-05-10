@@ -1,9 +1,16 @@
 package net.bjoernpetersen.localmp3.provider
 
 import com.mpatric.mp3agic.Mp3File
-import net.bjoernpetersen.localmp3.FileConfigSerializer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.withContext
 import net.bjoernpetersen.musicbot.api.config.Config
 import net.bjoernpetersen.musicbot.api.config.FileChooser
+import net.bjoernpetersen.musicbot.api.config.FileSerializer
 import net.bjoernpetersen.musicbot.api.loader.NoResource
 import net.bjoernpetersen.musicbot.api.loader.SongLoadingException
 import net.bjoernpetersen.musicbot.api.player.Song
@@ -15,13 +22,18 @@ import net.bjoernpetersen.musicbot.spi.plugin.management.InitStateWriter
 import net.bjoernpetersen.musicbot.spi.plugin.predefined.Mp3PlaybackFactory
 import java.io.File
 import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.time.Instant
-import java.time.temporal.ChronoUnit
 import java.util.Base64
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.coroutines.CoroutineContext
 
-class Mp3ProviderImpl : Mp3Provider {
+class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
+    private val job = Job()
+    override val coroutineContext: CoroutineContext
+        get() = Dispatchers.IO + job
+
     private var folder: Config.SerializedEntry<File>? = null
     private lateinit var recursive: Config.BooleanEntry
     @Inject
@@ -44,7 +56,7 @@ class Mp3ProviderImpl : Mp3Provider {
             description = "The folder the MP3s should be taken from",
             default = null,
             configChecker = ::checkFolder,
-            serializer = FileConfigSerializer,
+            serializer = FileSerializer,
             uiNode = FileChooser(isDirectory = true)
         )
         recursive = config.BooleanEntry(
@@ -59,13 +71,15 @@ class Mp3ProviderImpl : Mp3Provider {
     override fun createSecretEntries(secrets: Config): List<Config.Entry<*>> = emptyList()
     override fun createStateEntries(state: Config) {}
 
-    override fun initialize(initStateWriter: InitStateWriter) {
+    override suspend fun initialize(initStateWriter: InitStateWriter) {
         initStateWriter.state("Initializing...")
-        val start = Instant.now()
-        val folder = folder?.get() ?: throw InitializationException()
-        songById = initializeSongs(initStateWriter, folder, recursive.get())
-        val duration = start.until(Instant.now(), ChronoUnit.SECONDS)
-        initStateWriter.state("Done (found ${songById.size} in $duration seconds).")
+        withContext(coroutineContext) {
+            val start = Instant.now()
+            val folder = folder?.get() ?: throw InitializationException()
+            songById = initializeSongs(initStateWriter, folder, recursive.get())
+            val duration = Duration.between(start, Instant.now())
+            initStateWriter.state("Done (found ${songById.size} in ${duration.seconds} seconds).")
+        }
     }
 
     private fun toPath(id: String): File {
@@ -80,17 +94,19 @@ class Mp3ProviderImpl : Mp3Provider {
         return String(encoded, StandardCharsets.UTF_8)
     }
 
-    override fun loadSong(song: Song): Resource {
+    override suspend fun loadSong(song: Song): Resource {
         val file = toPath(song.id)
         if (!file.isFile) throw SongLoadingException("File not found: ${file.path}")
         return NoResource
     }
 
-    override fun supplyPlayback(song: Song, resource: Resource): Playback {
-        return playbackFactory.createPlayback(toPath(song.id))
+    override suspend fun supplyPlayback(song: Song, resource: Resource): Playback {
+        return withContext(coroutineContext) {
+            playbackFactory.createPlayback(toPath(song.id))
+        }
     }
 
-    private fun initializeSongs(
+    private suspend fun initializeSongs(
         initWriter: InitStateWriter,
         root: File,
         recursive: Boolean
@@ -99,49 +115,56 @@ class Mp3ProviderImpl : Mp3Provider {
             .filter(File::isFile)
             .filter { it.extension.toLowerCase(Locale.US) == "mp3" }
             .onEach { initWriter.state("Loading tag for '$it'") }
-            .map { createSong(it) }
+            .map { createSongAsync(it) }
+            .toList().awaitAll()
             .filterNotNull()
             .associateBy(Song::id) { it }
 
-    private fun createSong(file: File): Song? {
-        return try {
-            Mp3File(file.path).let {
-                val id3 = when {
-                    it.hasId3v1Tag() -> it.id3v1Tag
-                    it.hasId3v2Tag() -> it.id3v2Tag
-                    else -> return null
-                }
+    private fun createSongAsync(file: File): Deferred<Song?> = async { createSong(file) }
 
-                Song(
-                    id = toId(File(file.path)),
-                    title = id3.title,
-                    description = id3.artist ?: "",
-                    duration = it.lengthInSeconds.toInt(),
-                    provider = this
-                )
+    private suspend fun createSong(file: File): Song? {
+        return withContext(coroutineContext) {
+            try {
+                Mp3File(file.path).let {
+                    val id3 = when {
+                        it.hasId3v1Tag() -> it.id3v1Tag
+                        it.hasId3v2Tag() -> it.id3v2Tag
+                        else -> return@withContext null
+                    }
+
+                    Song(
+                        id = toId(File(file.path)),
+                        title = id3.title,
+                        description = id3.artist ?: "",
+                        duration = it.lengthInSeconds.toInt(),
+                        provider = this@Mp3ProviderImpl
+                    )
+                }
+            } catch (e: Exception) {
+                null
             }
-        } catch (e: Exception) {
-            null
         }
     }
 
-    override fun close() {}
+    override suspend fun close() {
+        job.cancel()
+    }
 
     override fun getSongs(): Collection<Song> {
         return songById.values
     }
 
-    override fun search(query: String, offset: Int): List<Song> {
+    override suspend fun search(query: String, offset: Int): List<Song> {
         val queryParts = query.toLowerCase().split(" ")
 
         return songById.values.filter {
             queryParts.any { query ->
                 it.title.toLowerCase().contains(query)
-                    || it.description.toLowerCase().contains(query)
+                        || it.description.toLowerCase().contains(query)
             }
         }
     }
 
-    override fun lookup(id: String): Song = songById[id]
+    override suspend fun lookup(id: String): Song = songById[id]
         ?: throw NoSuchSongException(id, Mp3Provider::class)
 }
