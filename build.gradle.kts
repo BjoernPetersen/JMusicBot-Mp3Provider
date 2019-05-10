@@ -15,7 +15,11 @@ version = "0.5.0"
 
 repositories {
     jcenter()
-    // maven("https://oss.sonatype.org/content/repositories/snapshots")
+    maven("https://oss.sonatype.org/content/repositories/snapshots") {
+        mavenContent {
+            snapshotsOnly()
+        }
+    }
 }
 
 idea {
@@ -48,27 +52,18 @@ tasks {
     }
 }
 
-configurations {
-    "runtime" {
-        exclude("org.slf4j")
-        exclude("org.jetbrains")
-        exclude("org.jetbrains.kotlin")
-        exclude("com.google.guava")
-        exclude("com.google.inject")
-    }
+configurations.all {
+    resolutionStrategy.cacheChangingModulesFor(1, TimeUnit.MINUTES)
 }
 
 dependencies {
-    implementation(
-        group = "io.github.microutils",
-        name = "kotlin-logging",
-        version = Lib.KOTLIN_LOGGING
-    )
     compileOnly(
         group = "com.github.bjoernpetersen",
         name = "musicbot",
         version = Lib.MUSICBOT
-    )
+    ) {
+        isChanging = Lib.MUSICBOT.contains("SNAPSHOT")
+    }
 
     implementation(
         group = "com.mpatric",
