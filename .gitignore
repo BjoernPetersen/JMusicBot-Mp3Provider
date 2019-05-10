@@ -24,7 +24,7 @@ hs_err_pid*
 .settings/
 
 # CircleCI
-.circle.yml
+!.circleci/
 
 # Mac #
 .DS_Store
