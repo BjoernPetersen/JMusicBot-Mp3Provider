@@ -145,13 +145,21 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
         (if (recursive) root.walk().asSequence() else root.listFiles().asSequence())
             .filter(File::isFile)
             .filter { it.extension.toLowerCase(Locale.US) == "mp3" }
-            .onEach { initWriter.state("Loading tag for '$it'") }
-            .map { createSongAsync(it) }
+            .map { createSongAsync(initWriter, it) }
             .toList().awaitAll()
             .filterNotNull()
             .associateBy(Song::id) { it }
 
-    private fun createSongAsync(file: File): Deferred<Song?> = async { createSong(file) }
+    private fun createSongAsync(initWriter: InitStateWriter, file: File): Deferred<Song?> = async {
+        logger.debug { "Loading tag for '$file'" }
+        createSong(file).also {
+            if (it == null) {
+                initWriter.warning("Could not load song from '$file'")
+            } else {
+                initWriter.state("""Loaded song ${it.title}""")
+            }
+        }
+    }
 
     private suspend fun createSong(file: File): Song? {
         return withContext(coroutineContext) {
