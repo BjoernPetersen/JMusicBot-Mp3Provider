@@ -33,12 +33,19 @@ private suspend fun ApplicationCall.respondAlbumArt(albumArt: AlbumArt) {
     respondBytes(albumArt.data, contentType = albumArt.contentType)
 }
 
-private class AlbumArtLoader {
+private class AlbumArtLoader(private val directory: Path) {
+    private val logger = KotlinLogging.logger { }
+
     private val cache: Cache<String, AlbumArt> = CacheBuilder.newBuilder()
         .maximumSize(256)
         .build()
 
     private fun loadFromFile(path: Path): AlbumArt? {
+        if (!path.startsWith(directory)) {
+            logger.warn { "Tried to load data from restricted file: $path" }
+            return null
+        }
+
         val mp3File = try {
             Mp3File(path)
         } catch (e: IOException) {
@@ -55,7 +62,7 @@ private class AlbumArtLoader {
     }
 
     fun getAlbumArt(path: Path): AlbumArt? {
-        val normalized = path.normalize()
+        val normalized = path.toAbsolutePath().normalize()
         val cached = cache.getIfPresent(normalized.toString())
         if (cached != null) return cached
 
@@ -70,15 +77,13 @@ private class AlbumArtLoader {
 }
 
 @KtorExperimentalAPI
-internal class AlbumArtServer {
+internal class AlbumArtServer(directory: Path) {
     private val logger = KotlinLogging.logger { }
 
-    private val albumArtLoader = AlbumArtLoader()
+    private val albumArtLoader = AlbumArtLoader(directory)
 
     private lateinit var engine: ApplicationEngine
     private lateinit var host: String
-
-    // TODO we should probably limit the possible paths to a directory
 
     suspend fun start(host: String) {
         this.host = host

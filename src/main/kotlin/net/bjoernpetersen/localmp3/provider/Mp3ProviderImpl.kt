@@ -57,7 +57,7 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
     override val subject = folder?.get()?.name ?: name
 
     private lateinit var albumArtHost: Config.SerializedEntry<NetworkInterface>
-    private val albumArtServer = AlbumArtServer()
+    private lateinit var albumArtServer: AlbumArtServer
 
     private fun checkFolder(file: File?): String? {
         if (file == null) return "Required"
@@ -98,15 +98,16 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
 
     override suspend fun initialize(initStateWriter: InitStateWriter) {
         initStateWriter.state("Initializing...")
+        val folder = folder?.get() ?: throw InitializationException()
         withContext(coroutineContext) {
             initStateWriter.state("Starting album art server")
+            albumArtServer = AlbumArtServer(folder.toPath())
             val host = findHost(albumArtHost.get())
                 ?: throw InitializationException("Could not find any valid IP address")
             albumArtServer.start(host)
 
             initStateWriter.state("Looking for songs...")
             val start = Instant.now()
-            val folder = folder?.get() ?: throw InitializationException()
             songById = initializeSongs(initStateWriter, folder, recursive.get())
             val duration = Duration.between(start, Instant.now())
             initStateWriter.state("Done (found ${songById.size} in ${duration.seconds} seconds).")
