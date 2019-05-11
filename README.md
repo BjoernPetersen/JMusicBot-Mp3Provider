@@ -1,4 +1,4 @@
-# MusicBot-Mp3Provider [![GitHub (pre-)release](https://img.shields.io/github/release/BjoernPetersen/MusicBot-Mp3Provider/all.svg)](https://github.com/BjoernPetersen/MusicBot-Mp3Provider/releases)
+# MusicBot-Mp3Provider [![GitHub (pre-)release](https://img.shields.io/github/release/BjoernPetersen/MusicBot-Mp3Provider/all.svg)](https://github.com/BjoernPetersen/MusicBot-Mp3Provider/releases) [![GitHub license](https://img.shields.io/github/license/BjoernPetersen/MusicBot-Mp3Provider.svg)](https://github.com/BjoernPetersen/MusicBot-Mp3Provider/blob/master/LICENSE)
 
 Provides MP3 songs from your local hard drive for MusicBot.
 
