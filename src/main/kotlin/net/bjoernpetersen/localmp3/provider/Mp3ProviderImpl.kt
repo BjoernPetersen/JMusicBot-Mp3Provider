@@ -165,7 +165,7 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
         return withContext(coroutineContext) {
             try {
                 val mp3 = try {
-                    Mp3File(file.path)
+                    Mp3File(file)
                 } catch (e: IOException) {
                     logger.error(e)
                     return@withContext null
@@ -181,7 +181,7 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
                 }
 
                 val albumArtUrl = if (id3 is ID3v2 && id3.albumImage != null) {
-                    albumArtServer.getUrl(file)
+                    albumArtServer.getUrl(file.toPath())
                 } else null
 
                 Song(

@@ -22,9 +22,9 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.util.KtorExperimentalAPI
 import io.ktor.util.pipeline.PipelineContext
 import mu.KotlinLogging
-import java.io.File
 import java.io.IOException
-import java.nio.file.InvalidPathException
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
 private class AlbumArt(val data: ByteArray, val contentType: ContentType)
@@ -38,14 +38,12 @@ private class AlbumArtLoader {
         .maximumSize(256)
         .build()
 
-    private fun loadFromFile(file: File): AlbumArt? {
+    private fun loadFromFile(path: Path): AlbumArt? {
         val mp3File = try {
-            Mp3File(file.path)
+            Mp3File(path)
         } catch (e: IOException) {
             return null
         } catch (e: BaseException) {
-            return null
-        } catch (e: InvalidPathException) {
             return null
         }
 
@@ -56,13 +54,14 @@ private class AlbumArtLoader {
         return AlbumArt(image, contentType)
     }
 
-    fun getAlbumArt(file: File): AlbumArt? {
-        val cached = cache.getIfPresent(file.path)
+    fun getAlbumArt(path: Path): AlbumArt? {
+        val normalized = path.normalize()
+        val cached = cache.getIfPresent(normalized.toString())
         if (cached != null) return cached
 
-        val loaded = loadFromFile(file)
+        val loaded = loadFromFile(normalized)
         if (loaded != null) {
-            cache.put(file.path, loaded)
+            cache.put(normalized.toString(), loaded)
             return loaded
         }
 
@@ -98,7 +97,7 @@ internal class AlbumArtServer {
         val params = call.request.queryParameters
         val path = params[PARAM_NAME] ?: throw BadRequestException("Missing parameter: $PARAM_NAME")
 
-        val albumArt = albumArtLoader.getAlbumArt(File(path))
+        val albumArt = albumArtLoader.getAlbumArt(Paths.get(path))
         if (albumArt != null) {
             call.respondAlbumArt(albumArt)
         } else {
@@ -106,13 +105,13 @@ internal class AlbumArtServer {
         }
     }
 
-    fun getUrl(file: File): String {
+    fun getUrl(path: Path): String {
         return URLBuilder(
             host = host,
             port = PORT,
             encodedPath = PATH,
             parameters = ParametersBuilder().apply {
-                append(PARAM_NAME, file.path)
+                append(PARAM_NAME, path.toAbsolutePath().normalize().toString())
             }
         ).buildString()
     }
