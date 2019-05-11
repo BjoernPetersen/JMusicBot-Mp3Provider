@@ -24,7 +24,6 @@ import io.ktor.util.pipeline.PipelineContext
 import mu.KotlinLogging
 import java.io.IOException
 import java.nio.file.Path
-import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
 private class AlbumArt(val data: ByteArray, val contentType: ContentType)
@@ -100,9 +99,10 @@ internal class AlbumArtServer(directory: Path) {
 
     private suspend fun PipelineContext<Unit, ApplicationCall>.serveImage() {
         val params = call.request.queryParameters
-        val path = params[PARAM_NAME] ?: throw BadRequestException("Missing parameter: $PARAM_NAME")
+        val id = params[PARAM_NAME] ?: throw BadRequestException("Missing parameter: $PARAM_NAME")
+        val path = id.toPath()
 
-        val albumArt = albumArtLoader.getAlbumArt(Paths.get(path))
+        val albumArt = albumArtLoader.getAlbumArt(path)
         if (albumArt != null) {
             call.respondAlbumArt(albumArt)
         } else {
@@ -110,13 +110,13 @@ internal class AlbumArtServer(directory: Path) {
         }
     }
 
-    fun getUrl(path: Path): String {
+    fun getUrl(encodedPath: String): String {
         return URLBuilder(
             host = host,
             port = PORT,
             encodedPath = PATH,
             parameters = ParametersBuilder().apply {
-                append(PARAM_NAME, path.toAbsolutePath().normalize().toString())
+                append(PARAM_NAME, encodedPath)
             }
         ).buildString()
     }

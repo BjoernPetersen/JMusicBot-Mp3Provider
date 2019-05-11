@@ -28,15 +28,12 @@ import net.bjoernpetersen.musicbot.spi.plugin.NoSuchSongException
 import net.bjoernpetersen.musicbot.spi.plugin.Playback
 import net.bjoernpetersen.musicbot.spi.plugin.management.InitStateWriter
 import net.bjoernpetersen.musicbot.spi.plugin.predefined.Mp3PlaybackFactory
-import java.io.File
 import java.io.IOException
 import java.net.NetworkInterface
-import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
-import java.util.Base64
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.coroutines.CoroutineContext
@@ -118,27 +115,15 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
         }
     }
 
-    private fun toPath(id: String): File {
-        val encoded = id.toByteArray(StandardCharsets.UTF_8)
-        val decoded = Base64.getDecoder().decode(encoded)
-        return File(String(decoded, StandardCharsets.UTF_8))
-    }
-
-    private fun toId(path: Path): String {
-        val encoded = Base64.getEncoder()
-            .encode(path.toString().toByteArray(StandardCharsets.UTF_8))
-        return String(encoded, StandardCharsets.UTF_8)
-    }
-
     override suspend fun loadSong(song: Song): Resource {
-        val file = toPath(song.id)
-        if (!file.isFile) throw SongLoadingException("File not found: ${file.path}")
+        val path = song.id.toPath()
+        if (!Files.isRegularFile(path)) throw SongLoadingException("File not found: $path")
         return NoResource
     }
 
     override suspend fun supplyPlayback(song: Song, resource: Resource): Playback {
         return withContext(coroutineContext) {
-            playbackFactory.createPlayback(toPath(song.id))
+            playbackFactory.createPlayback(song.id.toPath().toFile())
         }
     }
 
@@ -185,12 +170,13 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
                     else -> return@withContext null
                 }
 
+                val id = path.toId()
                 val albumArtUrl = if (id3 is ID3v2 && id3.albumImage != null) {
-                    albumArtServer.getUrl(path)
+                    albumArtServer.getUrl(id)
                 } else null
 
                 Song(
-                    id = toId(path),
+                    id = id,
                     title = id3.title,
                     description = id3.artist ?: "",
                     duration = mp3.lengthInSeconds.toInt(),
