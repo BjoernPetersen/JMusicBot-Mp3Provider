@@ -5,6 +5,7 @@ import com.mpatric.mp3agic.ID3v2
 import com.mpatric.mp3agic.Mp3File
 import io.ktor.util.KtorExperimentalAPI
 import io.ktor.util.error
+import io.ktor.util.extension
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -15,9 +16,9 @@ import kotlinx.coroutines.withContext
 import mu.KotlinLogging
 import net.bjoernpetersen.musicbot.api.config.ChoiceBox
 import net.bjoernpetersen.musicbot.api.config.Config
-import net.bjoernpetersen.musicbot.api.config.FileChooser
-import net.bjoernpetersen.musicbot.api.config.FileSerializer
 import net.bjoernpetersen.musicbot.api.config.NonnullConfigChecker
+import net.bjoernpetersen.musicbot.api.config.PathChooser
+import net.bjoernpetersen.musicbot.api.config.PathSerializer
 import net.bjoernpetersen.musicbot.api.loader.NoResource
 import net.bjoernpetersen.musicbot.api.loader.SongLoadingException
 import net.bjoernpetersen.musicbot.api.player.Song
@@ -31,12 +32,15 @@ import java.io.File
 import java.io.IOException
 import java.net.NetworkInterface
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
 import java.util.Base64
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.coroutines.CoroutineContext
+import kotlin.streams.asSequence
 
 @KtorExperimentalAPI
 class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
@@ -46,7 +50,7 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
 
     private val logger = KotlinLogging.logger { }
 
-    private var folder: Config.SerializedEntry<File>? = null
+    private var folder: Config.SerializedEntry<Path>? = null
     private lateinit var recursive: Config.BooleanEntry
     @Inject
     private lateinit var playbackFactory: Mp3PlaybackFactory
@@ -54,14 +58,14 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
 
     override val name = "Local MP3"
     override val description = "MP3s from some local directory"
-    override val subject = folder?.get()?.name ?: name
+    override val subject = folder?.get()?.fileName?.toString() ?: name
 
     private lateinit var albumArtHost: Config.SerializedEntry<NetworkInterface>
     private lateinit var albumArtServer: AlbumArtServer
 
-    private fun checkFolder(file: File?): String? {
-        if (file == null) return "Required"
-        if (!file.isDirectory) return "Not a directory"
+    private fun checkFolder(path: Path?): String? {
+        if (path == null) return "Required"
+        if (!Files.isDirectory(path)) return "Not a directory"
         return null
     }
 
@@ -71,8 +75,8 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
             description = "The folder the MP3s should be taken from",
             default = null,
             configChecker = ::checkFolder,
-            serializer = FileSerializer,
-            uiNode = FileChooser(isDirectory = true)
+            serializer = PathSerializer,
+            uiNode = PathChooser(isDirectory = true)
         )
         recursive = config.BooleanEntry(
             "recursive",
@@ -101,7 +105,7 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
         val folder = folder?.get() ?: throw InitializationException()
         withContext(coroutineContext) {
             initStateWriter.state("Starting album art server")
-            albumArtServer = AlbumArtServer(folder.toPath())
+            albumArtServer = AlbumArtServer(folder)
             val host = findHost(albumArtHost.get())
                 ?: throw InitializationException("Could not find any valid IP address")
             albumArtServer.start(host)
@@ -120,9 +124,9 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
         return File(String(decoded, StandardCharsets.UTF_8))
     }
 
-    private fun toId(file: File): String {
+    private fun toId(path: Path): String {
         val encoded = Base64.getEncoder()
-            .encode(file.path.toByteArray(StandardCharsets.UTF_8))
+            .encode(path.toString().toByteArray(StandardCharsets.UTF_8))
         return String(encoded, StandardCharsets.UTF_8)
     }
 
@@ -140,33 +144,33 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
 
     private suspend fun initializeSongs(
         initWriter: InitStateWriter,
-        root: File,
+        root: Path,
         recursive: Boolean
     ): Map<String, Song> =
-        (if (recursive) root.walk().asSequence() else root.listFiles().asSequence())
-            .filter(File::isFile)
+        (if (recursive) Files.walk(root).asSequence() else Files.list(root).asSequence())
+            .filter { Files.isRegularFile(it) }
             .filter { it.extension.toLowerCase(Locale.US) == "mp3" }
             .map { createSongAsync(initWriter, it) }
             .toList().awaitAll()
             .filterNotNull()
             .associateBy(Song::id) { it }
 
-    private fun createSongAsync(initWriter: InitStateWriter, file: File): Deferred<Song?> = async {
-        logger.debug { "Loading tag for '$file'" }
-        createSong(file).also {
+    private fun createSongAsync(initWriter: InitStateWriter, path: Path): Deferred<Song?> = async {
+        logger.debug { "Loading tag for '$path'" }
+        createSong(path).also {
             if (it == null) {
-                initWriter.warning("Could not load song from '$file'")
+                initWriter.warning("Could not load song from '$path'")
             } else {
                 initWriter.state("""Loaded song ${it.title}""")
             }
         }
     }
 
-    private suspend fun createSong(file: File): Song? {
+    private suspend fun createSong(path: Path): Song? {
         return withContext(coroutineContext) {
             try {
                 val mp3 = try {
-                    Mp3File(file)
+                    Mp3File(path)
                 } catch (e: IOException) {
                     logger.error(e)
                     return@withContext null
@@ -182,11 +186,11 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
                 }
 
                 val albumArtUrl = if (id3 is ID3v2 && id3.albumImage != null) {
-                    albumArtServer.getUrl(file.toPath())
+                    albumArtServer.getUrl(path)
                 } else null
 
                 Song(
-                    id = toId(File(file.path)),
+                    id = toId(path),
                     title = id3.title,
                     description = id3.artist ?: "",
                     duration = mp3.lengthInSeconds.toInt(),
