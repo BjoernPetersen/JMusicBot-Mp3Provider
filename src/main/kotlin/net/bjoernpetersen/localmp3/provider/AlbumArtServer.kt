@@ -1,5 +1,7 @@
 package net.bjoernpetersen.localmp3.provider
 
+import com.google.common.cache.Cache
+import com.google.common.cache.CacheBuilder
 import com.mpatric.mp3agic.BaseException
 import com.mpatric.mp3agic.Mp3File
 import io.ktor.application.ApplicationCall
@@ -19,18 +21,60 @@ import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.embeddedServer
 import io.ktor.util.KtorExperimentalAPI
 import io.ktor.util.pipeline.PipelineContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import mu.KotlinLogging
 import java.io.File
 import java.io.IOException
-import java.net.ServerSocket
 import java.nio.file.InvalidPathException
 import java.util.concurrent.TimeUnit
+
+private class AlbumArt(val data: ByteArray, val contentType: ContentType)
+
+private suspend fun ApplicationCall.respondAlbumArt(albumArt: AlbumArt) {
+    respondBytes(albumArt.data, contentType = albumArt.contentType)
+}
+
+private class AlbumArtLoader {
+    private val cache: Cache<String, AlbumArt> = CacheBuilder.newBuilder()
+        .maximumSize(256)
+        .build()
+
+    private fun loadFromFile(file: File): AlbumArt? {
+        val mp3File = try {
+            Mp3File(file.path)
+        } catch (e: IOException) {
+            return null
+        } catch (e: BaseException) {
+            return null
+        } catch (e: InvalidPathException) {
+            return null
+        }
+
+        if (!mp3File.hasId3v2Tag()) return null
+        val tag = mp3File.id3v2Tag
+        val image = tag.albumImage ?: return null
+        val contentType = tag.albumImageMimeType?.let { ContentType.parse(it) } ?: ContentType.Image.Any
+        return AlbumArt(image, contentType)
+    }
+
+    fun getAlbumArt(file: File): AlbumArt? {
+        val cached = cache.getIfPresent(file.path)
+        if (cached != null) return cached
+
+        val loaded = loadFromFile(file)
+        if (loaded != null) {
+            cache.put(file.path, loaded)
+            return loaded
+        }
+
+        return null
+    }
+}
 
 @KtorExperimentalAPI
 internal class AlbumArtServer {
     private val logger = KotlinLogging.logger { }
+
+    private val albumArtLoader = AlbumArtLoader()
 
     private lateinit var engine: ApplicationEngine
     private lateinit var host: String
@@ -53,21 +97,12 @@ internal class AlbumArtServer {
     private suspend fun PipelineContext<Unit, ApplicationCall>.serveImage() {
         val params = call.request.queryParameters
         val path = params[PARAM_NAME] ?: throw BadRequestException("Missing parameter: $PARAM_NAME")
-        val mp3File = try {
-            Mp3File(path)
-        } catch (e: IOException) {
-            throw NotFoundException()
-        } catch (e: BaseException) {
-            throw NotFoundException()
-        } catch (e: InvalidPathException) {
-            throw NotFoundException()
-        }
 
-        if (mp3File.hasId3v2Tag()) {
-            val tag = mp3File.id3v2Tag
-            val image = tag.albumImage ?: throw NotFoundException()
-            val contentType = tag.albumImageMimeType?.let { ContentType.parse(it) } ?: ContentType.Image.Any
-            call.respondBytes(image, contentType = contentType)
+        val albumArt = albumArtLoader.getAlbumArt(File(path))
+        if (albumArt != null) {
+            call.respondAlbumArt(albumArt)
+        } else {
+            throw NotFoundException()
         }
     }
 
@@ -90,12 +125,5 @@ internal class AlbumArtServer {
         const val PORT = 64375
         const val PATH = "/localAlbumArt"
         const val PARAM_NAME = "file"
-    }
-}
-
-@Throws(IOException::class)
-internal suspend fun findFreePort(): Int {
-    return withContext(Dispatchers.IO) {
-        ServerSocket(0).use { it.localPort }
     }
 }
