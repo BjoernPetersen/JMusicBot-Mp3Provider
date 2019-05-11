@@ -214,8 +214,8 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
 
         return songById.values.filter {
             queryParts.any { query ->
-                it.title.toLowerCase().contains(query)
-                        || it.description.toLowerCase().contains(query)
+                it.title.toLowerCase().contains(query) ||
+                        it.description.toLowerCase().contains(query)
             }
         }
     }
