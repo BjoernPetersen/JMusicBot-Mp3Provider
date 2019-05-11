@@ -19,6 +19,7 @@ import net.bjoernpetersen.musicbot.api.config.Config
 import net.bjoernpetersen.musicbot.api.config.NonnullConfigChecker
 import net.bjoernpetersen.musicbot.api.config.PathChooser
 import net.bjoernpetersen.musicbot.api.config.PathSerializer
+import net.bjoernpetersen.musicbot.api.config.TextBox
 import net.bjoernpetersen.musicbot.api.loader.NoResource
 import net.bjoernpetersen.musicbot.api.loader.SongLoadingException
 import net.bjoernpetersen.musicbot.api.player.Song
@@ -53,9 +54,12 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
     private lateinit var playbackFactory: Mp3PlaybackFactory
     private lateinit var songById: Map<String, Song>
 
+    private var customSubject: Config.StringEntry? = null
+
     override val name = "Local MP3"
     override val description = "MP3s from some local directory"
-    override val subject = folder?.get()?.fileName?.toString() ?: name
+    override val subject
+        get() = customSubject?.get() ?: folder?.get()?.fileName?.toString() ?: name
 
     private lateinit var albumArtHost: Config.SerializedEntry<NetworkInterface>
     private lateinit var albumArtServer: AlbumArtServer
@@ -81,6 +85,13 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
             false
         )
 
+        customSubject = config.StringEntry(
+            "DisplayName",
+            "Name to display in clients, defaults to folder name",
+            { null },
+            TextBox
+        )
+
         albumArtHost = config.SerializedEntry(
             "network interface",
             "The network interface to server album arts on",
@@ -91,7 +102,7 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
             })
         )
 
-        return listOf(folder!!, recursive, albumArtHost)
+        return listOf(folder!!, recursive, customSubject!!, albumArtHost)
     }
 
     override fun createSecretEntries(secrets: Config): List<Config.Entry<*>> = emptyList()

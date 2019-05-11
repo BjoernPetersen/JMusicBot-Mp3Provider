@@ -2,6 +2,7 @@ package net.bjoernpetersen.localmp3.suggester
 
 import net.bjoernpetersen.localmp3.provider.Mp3Provider
 import net.bjoernpetersen.musicbot.api.config.Config
+import net.bjoernpetersen.musicbot.api.config.TextBox
 import net.bjoernpetersen.musicbot.api.player.Song
 import net.bjoernpetersen.musicbot.api.plugin.IdBase
 import net.bjoernpetersen.musicbot.spi.plugin.Suggester
@@ -15,11 +16,24 @@ class Mp3Suggester : Suggester {
     @Inject
     private lateinit var provider: Mp3Provider
 
+    private var customSubject: Config.StringEntry? = null
+
     override val name = "Random local MP3"
     override val description = "Plays random MP3s from a local directory"
-    override val subject = "Random MP3"
+    override val subject
+        get() = customSubject?.get() ?: "Random ${provider.subject}"
 
-    override fun createConfigEntries(config: Config): List<Config.Entry<*>> = emptyList()
+    override fun createConfigEntries(config: Config): List<Config.Entry<*>> {
+        customSubject = config.StringEntry(
+            "DisplayName",
+            "Name to display in clients",
+            { null },
+            TextBox
+        )
+
+        return listOf(customSubject!!)
+    }
+
     override fun createSecretEntries(secrets: Config): List<Config.Entry<*>> = emptyList()
     override fun createStateEntries(state: Config) {}
 
