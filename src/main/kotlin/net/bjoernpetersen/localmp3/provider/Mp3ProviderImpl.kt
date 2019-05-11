@@ -86,7 +86,7 @@ class Mp3ProviderImpl : Mp3Provider, CoroutineScope {
             "The network interface to server album arts on",
             NetworkInterfaceSerializer,
             NonnullConfigChecker,
-            ChoiceBox({ "${it.displayName} (${it.name}" }, lazy = true, refresh = {
+            ChoiceBox({ "${it.displayName} (${it.name})" }, lazy = true, refresh = {
                 findNetworkInterfaces()
             })
         )
