@@ -23,6 +23,7 @@ import io.ktor.util.KtorExperimentalAPI
 import io.ktor.util.pipeline.PipelineContext
 import mu.KotlinLogging
 import java.io.IOException
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
@@ -100,7 +101,11 @@ internal class AlbumArtServer(directory: Path) {
     private suspend fun PipelineContext<Unit, ApplicationCall>.serveImage() {
         val params = call.request.queryParameters
         val id = params[PARAM_NAME] ?: throw BadRequestException("Missing parameter: $PARAM_NAME")
-        val path = id.toPath()
+        val path = try {
+            id.toPath()
+        } catch (e: InvalidPathException) {
+            throw BadRequestException("Invalid file")
+        }
 
         val albumArt = albumArtLoader.getAlbumArt(path)
         if (albumArt != null) {
